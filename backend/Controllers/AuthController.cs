@@ -56,7 +56,7 @@ public class AuthController : ControllerBase
         insertCommand.Parameters.AddWithValue("@Token", refreshToken);
         insertCommand.Parameters.AddWithValue("@UserId", userId);
         //insertCommand.Parameters.AddWithValue("@ExpiryDate", DateTime.UtcNow.AddDays(7)); //Cuantos días durará el token de refresh
-        insertCommand.Parameters.AddWithValue("@ExpiryDate", DateTime.UtcNow.AddMinutes(1)); //Cuantos minutos durará el token de refresh
+        insertCommand.Parameters.AddWithValue("@ExpiryDate", DateTime.UtcNow.AddMinutes(3)); //Cuantos minutos durará el token de refresh
         insertCommand.ExecuteNonQuery();
 
         return Ok(new { AccessToken = accessToken, RefreshToken = refreshToken });
@@ -112,7 +112,7 @@ public class AuthController : ControllerBase
         insertCommand.Parameters.AddWithValue("@Token", newRefreshToken);
         insertCommand.Parameters.AddWithValue("@UserId", userId);
         //insertCommand.Parameters.AddWithValue("@ExpiryDate", DateTime.UtcNow.AddDays(7)); //Cuantos minutos durará el token de refresh
-        insertCommand.Parameters.AddWithValue("@ExpiryDate", DateTime.UtcNow.AddMinutes(1)); //Cuantos minutos durará el token de refresh
+        insertCommand.Parameters.AddWithValue("@ExpiryDate", DateTime.UtcNow.AddMinutes(3)); //Cuantos minutos durará el token de refresh
         insertCommand.ExecuteNonQuery();
 
         return Ok(new { AccessToken = newAccessToken, RefreshToken = newRefreshToken });
