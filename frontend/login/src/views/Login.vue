@@ -21,7 +21,7 @@
 </template>
 
 <script>
-import axios from "axios";
+import api from "@/api.js"; // ✅ usamos el mismo cliente
 
 export default {
   data() {
@@ -34,19 +34,20 @@ export default {
   methods: {
     async login() {
       try {
-        const response = await axios.post("https://localhost:7047/api/auth/login", {
+        const response = await api.post("/auth/login", {
           username: this.username,
           password: this.password,
         });
 
-        // ✅ Guardar tokens en localStorage
+        // ✅ Guardar tokens con los nombres correctos
         localStorage.setItem("accessToken", response.data.accessToken);
         localStorage.setItem("refreshToken", response.data.refreshToken);
 
         // ✅ Redirigir al dashboard
         this.$router.push("/dashboard");
       } catch (error) {
-        this.errorMessage = error.response?.data?.message || "Login failed";
+        console.error("Error en login:", error);
+        this.errorMessage = error.response?.data || "Login failed";
       }
     },
   },

@@ -56,7 +56,7 @@ const logout = async () => {
   max-width: 600px;
   margin: 2rem auto;
   padding: 1.5rem;
-  background: #f9f9f9;
+  background: #856868FF;
   border-radius: 8px;
   text-align: center;
   box-shadow: 0 2px 6px rgba(0,0,0,0.1);
