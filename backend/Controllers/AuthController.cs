@@ -25,77 +25,77 @@ public class AuthController : ControllerBase
         using var connection = _dbService.GetConnection();
         using var command = connection.CreateCommand();
 
-        // 1. Buscar al usuario por el nombre de usuario para obtener su hash de contraseña.
         command.CommandText = "SELECT Id, PasswordHash FROM Users WHERE Username = @Username;";
         command.Parameters.AddWithValue("@Username", model.Username);
 
         using var reader = command.ExecuteReader();
-        if (!reader.Read())
-        {
-            // Si no se encuentra el usuario, se devuelven credenciales inválidas.
-            return Unauthorized("Credenciales inválidas.");
-        }
+        if (!reader.Read()) return Unauthorized("Credenciales inválidas.");
 
         var userId = reader.GetInt32(0);
-        var storedPasswordHash = reader.GetString(1); // Obtiene el hash almacenado
+        var storedPasswordHash = reader.GetString(1);
 
-        // 2. Verificar la contraseña con el método de BCrypt.
         if (!BCrypt.Net.BCrypt.Verify(model.Password, storedPasswordHash))
-        {
-            // Si la verificación falla, se devuelven credenciales inválidas.
             return Unauthorized("Credenciales inválidas.");
-        }
 
-        // Si la verificación es exitosa, el resto de la lógica sigue igual:
-        // Generar y guardar los tokens
         var accessToken = Generador.GenerateAccessToken(new User { Id = userId, Username = model.Username });
         var refreshToken = Generador.GenerateRefreshToken();
 
+        var expiryDate = DateTime.UtcNow.AddMinutes(3);   // corta vida
+        var maxExpiryDate = DateTime.UtcNow.AddMinutes(6);   // vida máxima de sesión
+
         using var insertCommand = connection.CreateCommand();
-        insertCommand.CommandText = "INSERT INTO RefreshTokens (Token, UserId, ExpiryDate) VALUES (@Token, @UserId, @ExpiryDate);";
+        insertCommand.CommandText = "INSERT INTO RefreshTokens (Token, UserId, ExpiryDate, MaxExpiryDate) VALUES (@Token, @UserId, @ExpiryDate, @MaxExpiryDate);";
         insertCommand.Parameters.AddWithValue("@Token", refreshToken);
         insertCommand.Parameters.AddWithValue("@UserId", userId);
-        //insertCommand.Parameters.AddWithValue("@ExpiryDate", DateTime.UtcNow.AddDays(7)); //Cuantos días durará el token de refresh
-        insertCommand.Parameters.AddWithValue("@ExpiryDate", DateTime.UtcNow.AddMinutes(3)); //Cuantos minutos durará el token de refresh
+        insertCommand.Parameters.AddWithValue("@ExpiryDate", expiryDate);
+        insertCommand.Parameters.AddWithValue("@MaxExpiryDate", maxExpiryDate);
         insertCommand.ExecuteNonQuery();
 
-        return Ok(new { AccessToken = accessToken, RefreshToken = refreshToken });
+        return Ok(
+            new { 
+                AccessToken = accessToken, 
+                RefreshToken = refreshToken,
+                RefreshExpiry = expiryDate,
+                RefreshMaxExpiry = maxExpiryDate
+            }
+            );
     }
+
 
     [HttpPost("refresh")]
     public IActionResult Refresh([FromBody] RefreshTokenRequest model)
     {
         using var connection = _dbService.GetConnection();
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT UserId, ExpiryDate FROM RefreshTokens WHERE Token = @Token;";
+        command.CommandText = "SELECT UserId, ExpiryDate, MaxExpiryDate FROM RefreshTokens WHERE Token = @Token;";
         command.Parameters.AddWithValue("@Token", model.RefreshToken);
 
         using var reader = command.ExecuteReader();
-        if (!reader.Read())
-        {
-            return BadRequest("Invalid or expired refresh token.");
-        }
+        if (!reader.Read()) return BadRequest("Invalid or expired refresh token.");
 
         var userId = reader.GetInt32(0);
         var expiryDate = reader.GetDateTime(1);
+        var maxExpiryDate = reader.GetDateTime(2);
+
+        // ⏳ Validar expiración corta
         if (expiryDate < DateTime.UtcNow)
         {
-            // Revocar el token
-            using var deleteCommand = connection.CreateCommand();
-            deleteCommand.CommandText = "DELETE FROM RefreshTokens WHERE Token = @Token;";
-            deleteCommand.Parameters.AddWithValue("@Token", model.RefreshToken);
-            deleteCommand.ExecuteNonQuery();
-
-            return BadRequest("Invalid or expired refresh token.");
+            return BadRequest("Refresh token expired.");
         }
 
-        // Eliminar el token de refresco antiguo
-        using var deleteCommand2 = connection.CreateCommand();
-        deleteCommand2.CommandText = "DELETE FROM RefreshTokens WHERE Token = @Token;";
-        deleteCommand2.Parameters.AddWithValue("@Token", model.RefreshToken);
-        deleteCommand2.ExecuteNonQuery();
+        // 🔒 Validar expiración máxima
+        if (maxExpiryDate < DateTime.UtcNow)
+        {
+            return BadRequest("Session expired. Please login again.");
+        }
 
-        // Obtener el usuario
+        // 🗑️ Eliminar el token usado
+        using var deleteCommand = connection.CreateCommand();
+        deleteCommand.CommandText = "DELETE FROM RefreshTokens WHERE Token = @Token;";
+        deleteCommand.Parameters.AddWithValue("@Token", model.RefreshToken);
+        deleteCommand.ExecuteNonQuery();
+
+        // 👤 Obtener usuario
         using var userCommand = connection.CreateCommand();
         userCommand.CommandText = "SELECT Id, Username FROM Users WHERE Id = @UserId;";
         userCommand.Parameters.AddWithValue("@UserId", userId);
@@ -104,18 +104,30 @@ public class AuthController : ControllerBase
 
         var user = new User { Id = userReader.GetInt32(0), Username = userReader.GetString(1) };
 
-        // Generar un nuevo JWT y un nuevo Refresh Token
+        // 🔑 Generar nuevos tokens
         var newAccessToken = Generador.GenerateAccessToken(user);
         var newRefreshToken = Generador.GenerateRefreshToken();
+        var newExpiryDate = DateTime.UtcNow.AddMinutes(3); // corta vida
+
+        // 💾 Guardar nuevo refresh token, pero conservar MaxExpiry original
         using var insertCommand = connection.CreateCommand();
-        insertCommand.CommandText = "INSERT INTO RefreshTokens (Token, UserId, ExpiryDate) VALUES (@Token, @UserId, @ExpiryDate);";
+        insertCommand.CommandText = @"
+        INSERT INTO RefreshTokens (Token, UserId, ExpiryDate, MaxExpiryDate) 
+        VALUES (@Token, @UserId, @ExpiryDate, @MaxExpiryDate);";
         insertCommand.Parameters.AddWithValue("@Token", newRefreshToken);
         insertCommand.Parameters.AddWithValue("@UserId", userId);
-        //insertCommand.Parameters.AddWithValue("@ExpiryDate", DateTime.UtcNow.AddDays(7)); //Cuantos minutos durará el token de refresh
-        insertCommand.Parameters.AddWithValue("@ExpiryDate", DateTime.UtcNow.AddMinutes(3)); //Cuantos minutos durará el token de refresh
+        insertCommand.Parameters.AddWithValue("@ExpiryDate", newExpiryDate);
+        insertCommand.Parameters.AddWithValue("@MaxExpiryDate", maxExpiryDate);
         insertCommand.ExecuteNonQuery();
 
-        return Ok(new { AccessToken = newAccessToken, RefreshToken = newRefreshToken });
+        // ✅ Retornar también las fechas para que el frontend pueda validar
+        return Ok(new
+        {
+            AccessToken = newAccessToken,
+            RefreshToken = newRefreshToken,
+            RefreshExpiry = newExpiryDate,
+            RefreshMaxExpiry = maxExpiryDate
+        });
     }
 
     [HttpPost("logout")]

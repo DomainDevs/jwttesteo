@@ -9,13 +9,12 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend",
-        builder =>
-        {
-            builder.WithOrigins("https://localhost:5173")
-                   .AllowAnyHeader()
-                   .AllowAnyMethod();
-        });
+        policy => policy
+            .WithOrigins("https://localhost:5173")
+            .AllowAnyHeader()
+            .AllowAnyMethod());
 });
+
 
 
 // Add services to the container.
@@ -38,15 +37,20 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = "tu-api",
-            ValidAudience = "tu-aplicacion",
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes("TuSuperMegaSecretaClaveDe256bitsAqui"))
+            ValidIssuer = "https://localhost:7047", // 👈 debe coincidir con ValidIssuer //BackEnd
+            ValidAudience = "https://localhost:5173", // 👈 debe coincidir con ValidAudience //FrontEnd
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes("TuSuperMegaSecretaClaveDe256bitsAqui*tr53ghpoyhgrhjhts5d3sd"))
         };
     });
 builder.Services.AddAuthorization();
 
 
 var app = builder.Build();
+
+
+// *** Aquí debes añadir la llamada a UseCors() ***
+app.UseCors("AllowFrontend");
+
 
 app.UseSwagger();
 app.UseSwaggerUI();
@@ -59,8 +63,6 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-// *** Aquí debes añadir la llamada a UseCors() ***
-app.UseCors("AllowFrontend");
 
 app.UseAuthentication(); // Va antes de la autorización
 app.UseAuthorization();

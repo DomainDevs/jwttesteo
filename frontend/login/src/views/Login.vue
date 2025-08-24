@@ -42,6 +42,8 @@ export default {
         // ✅ Guardar tokens con los nombres correctos
         localStorage.setItem("accessToken", response.data.accessToken);
         localStorage.setItem("refreshToken", response.data.refreshToken);
+        localStorage.setItem('refreshExpiry', response.data.refreshExpiry);
+        localStorage.setItem('refreshMaxExpiry', response.data.refreshMaxExpiry);
 
         // ✅ Redirigir al dashboard
         this.$router.push("/dashboard");

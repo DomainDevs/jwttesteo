@@ -25,8 +25,8 @@ public static class Generador
 
         // Crea el token con la información, la expiración y la firma
         var token = new JwtSecurityToken(
-            issuer: "TokenyRefresh",
-            audience: "TokenyRefresh",
+            issuer: "https://localhost:7047", //BackEnd
+            audience: "https://localhost:5173", //FrontEnd
             claims: claims,
             //expires: DateTime.UtcNow.AddMinutes(15), // Expira access token, expira en 15 minutos
             expires: DateTime.UtcNow.AddSeconds(30), // Expira access token, expira en 30 segundo para pruebas

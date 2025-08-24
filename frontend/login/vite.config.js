@@ -9,6 +9,8 @@ import mkcert from 'vite-plugin-mkcert';
 export default defineConfig({
   plugins: [ vue(), vueDevTools(), mkcert() ],
   server: {
+    port: 5173,      // 🔹 puerto fijo
+    strictPort: true, // ❌ si está ocupado, falla en vez de usar otro
     https: true
   },
   resolve: {
